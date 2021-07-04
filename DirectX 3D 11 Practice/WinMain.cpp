@@ -46,16 +46,13 @@ Win32MainWindowCallback(HWND Window,
 {
 	switch (Message) {
 	case WM_CLOSE: {
-		PostQuitMessage(0);
+		PostQuitMessage(10);
 		globalRunning = false;
-	} break;
-
-	default: {
-		return DefWindowProc(Window, Message, WParam, LParam);
-	} break;
-
+		break;
 	}
-	return 0;
+	}
+
+	return DefWindowProc(Window, Message, WParam, LParam);
 	
 }
      
@@ -96,14 +93,13 @@ int CALLBACK WinMain(
 		there are no messages...genereally used in video games, or
 		applications that need to do things without the user sending
 		a message.*/
+
 	MSG msg = { 0 };
 	BOOL result;
-	while (globalRunning) {
-		PeekMessage(&msg, NULL, 0, 0, PM_REMOVE);
+	while (result = GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
-
 	}
 
-	return 0;
+	return msg.wParam;
 }
