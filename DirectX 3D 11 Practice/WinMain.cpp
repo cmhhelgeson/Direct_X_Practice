@@ -18,7 +18,7 @@ global bool32 globalRunning = true;
 
 void MessageToString(UINT message, LPARAM lp, WPARAM wp) {
 	std::ostringstream oss;
-	oss << "Message: " << message << '\n';
+	oss << "Message: " << message;
 	oss << "   LP: 0x" << std::hex << std::setfill('0') << std::setw(8) << lp;
 	oss << "   WP: 0x" << std::hex << std::setfill('0') << std::setw(8) << wp << '\n';
 	OutputDebugString(oss.str().c_str());
@@ -97,7 +97,7 @@ int CALLBACK WinMain(
 			200, 200, 640, 480,
 			nullptr, nullptr, Instance, nullptr);
 
-	ShowWindow(window_handle, SW_MAXIMIZE);
+	ShowWindow(window_handle, SW_SHOW);
 
 	/* @from http://www.cplusplus.com/forum/beginner/38860/
 		GetMessage: "will check the message queue for message, if
