@@ -1,13 +1,28 @@
 #include <Windows.h>
 #include <stdint.h>
+#include <unordered_map>
+#include <string>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
 
 #define internal static
 #define local static
 #define global static;
 
+#define REGISTER_MESSAGE(msg){#msg}
+
 typedef int32_t bool32;
 
 global bool32 globalRunning = true;
+
+void MessageToString(UINT message, LPARAM lp, WPARAM wp) {
+	std::ostringstream oss;
+	oss << "Message: " << message << '\n';
+	oss << "   LP: 0x" << std::hex << std::setfill('0') << std::setw(8) << lp;
+	oss << "   WP: 0x" << std::hex << std::setfill('0') << std::setw(8) << wp << '\n';
+	OutputDebugString(oss.str().c_str());
+}
 
 //How to create a window
 //Register a Windows Class, then create an instance of that class
@@ -44,6 +59,7 @@ Win32MainWindowCallback(HWND Window,
 	WPARAM WParam,
 	LPARAM LParam)
 {
+	MessageToString(Message, LParam, WParam);
 	switch (Message) {
 	case WM_CLOSE: {
 		PostQuitMessage(10);
