@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
+
 #define internal static
 #define local static
 #define global static;
@@ -14,7 +15,12 @@
 
 typedef int32_t bool32;
 
-global bool32 globalRunning = true;
+global bool inputText = false;
+
+struct Title {
+	std::string title = "Enter title here: ";
+	bool used = false;
+};
 
 void MessageToString(UINT message, LPARAM lp, WPARAM wp) {
 	std::ostringstream oss;
@@ -60,13 +66,52 @@ Win32MainWindowCallback(HWND Window,
 	LPARAM LParam)
 {
 	MessageToString(Message, LParam, WParam);
+	static Title t;
 	switch (Message) {
-	case WM_CLOSE: {
+	case WM_CLOSE:
 		PostQuitMessage(10);
-		globalRunning = false;
+		break;
+	case WM_KEYDOWN:
+		switch (WParam) {
+		case VK_LEFT:
+			SetWindowText(Window, "LEFT");
+			break;
+		case VK_RIGHT:
+			SetWindowText(Window, "RIGHT");
+			break;
+		case VK_DOWN:
+			SetWindowText(Window, "DOWN");
+			break;
+		case VK_UP:
+			SetWindowText(Window, "UP");
+			break;
+		case VK_RETURN:
+			inputText = !inputText;
+			break;
+		case VK_DELETE:
+			if (t.title.length() != 0) {
+				t.title.pop_back();
+			}
+			break;
+		}
+		break;
+	case WM_KEYUP:
+		SetWindowText(Window, t.title.c_str());
+		break;
+	//Only corresponds to text character. 
+	//Can also understand difference between lower case and uppercase
+	//So good for text or keyboard input
+	case WM_CHAR:
+		if (!t.used) {
+			t.used = true;
+			t.title.clear();
+		}
+		t.title.push_back(char(WParam));
 		break;
 	}
-	}
+	
+	
+
 
 	return DefWindowProc(Window, Message, WParam, LParam);
 	
@@ -92,7 +137,7 @@ int CALLBACK WinMain(
 	RegisterClassEx(&window_class);
 
 	HWND window_handle =
-		CreateWindowEx(0, class_name, "Direct X Practice",
+		CreateWindowEx(0, class_name, "Enter title here: ",
 			WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
 			200, 200, 640, 480,
 			nullptr, nullptr, Instance, nullptr);
@@ -113,7 +158,9 @@ int CALLBACK WinMain(
 	MSG msg = { 0 };
 	BOOL result;
 	while (result = GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
+		/*Translate Message: Outputs WM_CHAR messages if you need
+		  text input */
+		TranslateMessage(&msg); 
 		DispatchMessage(&msg);
 	}
 
