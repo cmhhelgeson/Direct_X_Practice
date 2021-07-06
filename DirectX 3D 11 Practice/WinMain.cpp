@@ -15,11 +15,11 @@
 
 typedef int32_t bool32;
 
-global bool inputText = false;
 
 struct Title {
 	std::string title = "Enter title here: ";
 	bool used = false;
+	bool lock = false;
 };
 
 void MessageToString(UINT message, LPARAM lp, WPARAM wp) {
@@ -86,10 +86,10 @@ Win32MainWindowCallback(HWND Window,
 			SetWindowText(Window, "UP");
 			break;
 		case VK_RETURN:
-			inputText = !inputText;
+			t.lock = true;
 			break;
 		case VK_DELETE:
-			if (t.title.length() != 0) {
+			if (!t.lock && t.title.length() != 0) {
 				t.title.pop_back();
 			}
 			break;
@@ -106,7 +106,9 @@ Win32MainWindowCallback(HWND Window,
 			t.used = true;
 			t.title.clear();
 		}
-		t.title.push_back(char(WParam));
+		if (!t.lock) {
+			t.title.push_back(char(WParam));
+		}
 		break;
 	}
 	
