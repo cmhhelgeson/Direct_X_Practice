@@ -1,170 +1,193 @@
-#include <Windows.h>
-#include <stdint.h>
-#include <unordered_map>
-#include <string>
+#include <SDL.h>
+#include <SDL_syswm.h>
+#include <SDL_system.h>
+#include "C:\SDL2-w64\include\SDL2\SDL_image.h"
 #include <iostream>
-#include <sstream>
-#include <iomanip>
+#include <stdio.h>
+#include <d3d11.h>
+#include <dxgi1_6.h>
+#include <vector>
 
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 400;
 
-#define internal static
-#define local static
-#define global static;
+typedef struct Vec4 {
+	float x, y, z, w;
+} Vec4;
 
-#define REGISTER_MESSAGE(msg){#msg}
-
-typedef int32_t bool32;
-
-
-struct Title {
-	std::string title = "Enter title here: ";
-	bool used = false;
-	bool lock = false;
-};
-
-void MessageToString(UINT message, LPARAM lp, WPARAM wp) {
-	std::ostringstream oss;
-	oss << "Message: " << message;
-	oss << "   LP: 0x" << std::hex << std::setfill('0') << std::setw(8) << lp;
-	oss << "   WP: 0x" << std::hex << std::setfill('0') << std::setw(8) << wp << '\n';
-	OutputDebugString(oss.str().c_str());
+void InitializeVec4(Vec4& v, float _x, float _y, float _z, float _w) {
+	v.x = _x;
+	v.y = _y;
+	v.z = _z;
+	v.w = _w;
 }
 
-//How to create a window
-//Register a Windows Class, then create an instance of that class
 
-/* Windows manages data for your window including messages.
-	When you do something, it will put messages into a queue
-	When you're ready, you call getmessage to pull message.
-	You will do processing on those messages.
-	
-	TranslateMessage will generate a wm_char message.
-	DispatchMessage passes message back to windows 32 side
-	Every window has a pointer to a windows 32 procedure.*/
+/* Graphics helper functions are forward declared
+	Sometimes we do this for reasons relating to classes? */
+bool CreateDeviceD3D(HWND hWnd);
+void CleanDeviceD3D();
+void CreateRenderTarget();
+void CleanupRenderTarget();
 
-/* What is an HINSTANCE?
-	An HINSTANCE is a handle to identify your application.
-	Specifically, it's a handle that identifies the executable 
-	file produced by your code from other exes in the same
-	application?. A pointer to the memory address of the exe
-	file. */
+static ID3D11Device* p_3D_DEVICE = NULL;
+static ID3D11DeviceContext* p_3D_DEVICE_CONTEXT = NULL;
+static IDXGISwapChain* p_SWAP_CHAIN = NULL;
+static ID3D11RenderTargetView* p_RENDER_TARGET_VIEW = NULL;
 
-/* WinMain: 
-	@commands:
-	HInstance 1: Handle to the exe
-	HInstance 2: Legacy variable from 16-bit Windows.N o longer used. 
-	LPSTR: Command Line Arguments as Unicode String
-	INT: Will the Application Start Minimized, Maximized, or Normal. 
-	Go to MSDN Show Window function.
-	@returns:
-	Integer Status Code */
 
-internal LRESULT CALLBACK
-Win32MainWindowCallback(HWND Window,
-	UINT Message,
-	WPARAM WParam,
-	LPARAM LParam)
-{
-	MessageToString(Message, LParam, WParam);
-	static Title t;
-	switch (Message) {
-	case WM_CLOSE:
-		PostQuitMessage(10);
-		break;
-	case WM_KEYDOWN:
-		switch (WParam) {
-		case VK_LEFT:
-			SetWindowText(Window, "LEFT");
-			break;
-		case VK_RIGHT:
-			SetWindowText(Window, "RIGHT");
-			break;
-		case VK_DOWN:
-			SetWindowText(Window, "DOWN");
-			break;
-		case VK_UP:
-			SetWindowText(Window, "UP");
-			break;
-		case VK_RETURN:
-			t.lock = true;
-			break;
-		case VK_DELETE:
-			if (!t.lock && t.title.length() != 0) {
-				t.title.pop_back();
+
+int main(int argc, char* args[]) {
+	Vec4 v;
+	InitializeVec4(v, 0.45f, 0.55f, 0.60f, 1.00f);
+	SDL_Window* window;
+	SDL_SysWMinfo info;
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+		std::cout << "SDL Initialization failed" << std::endl;
+		std::cout << "Press Enter to exit program: " << std::endl;
+		std::cin.get();
+		return -1;
+	}
+
+	SDL_WindowFlags window_flags =
+		(SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+
+	window = SDL_CreateWindow("SDL2",
+		SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720,
+		window_flags);
+
+	SDL_VERSION(&info.version);
+	SDL_GetWindowWMInfo(window, &info);
+	HWND window_handle = (HWND)info.info.win.window;
+
+	//Initialize Direct3D
+	if (!CreateDeviceD3D(window_handle)) {
+		CleanDeviceD3D();
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return -1;
+	};
+
+	bool done = false;
+	while (!done) {
+		SDL_Event event;
+		while (SDL_PollEvent(&event))
+		{
+			if (event.type == SDL_QUIT)
+				done = true;
+			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
+				done = true;
+			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_RESIZED && event.window.windowID == SDL_GetWindowID(window))
+			{
+				// Release all outstanding references to the swap chain's buffers before resizing.
+				CleanupRenderTarget();
+				p_SWAP_CHAIN->ResizeBuffers(0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+				CreateRenderTarget();
 			}
-			break;
 		}
-		break;
-	case WM_KEYUP:
-		SetWindowText(Window, t.title.c_str());
-		break;
-	//Only corresponds to text character. 
-	//Can also understand difference between lower case and uppercase
-	//So good for text or keyboard input
-	case WM_CHAR:
-		if (!t.used) {
-			t.used = true;
-			t.title.clear();
-		}
-		if (!t.lock) {
-			t.title.push_back(char(WParam));
-		}
-		break;
+
+		// Rendering
+		const float clear_color_with_alpha[4] = { v.x * v.w, v.y * v.w, v.z * v.w, v.w };
+		p_3D_DEVICE_CONTEXT->OMSetRenderTargets(1, &p_RENDER_TARGET_VIEW, NULL);
+		p_3D_DEVICE_CONTEXT->ClearRenderTargetView(p_RENDER_TARGET_VIEW, clear_color_with_alpha);
+
+
+
+		p_SWAP_CHAIN->Present(1, 0); // Present with vsync
+		//g_pSwapChain->Present(0, 0); // Present without vsync
 	}
-	
-	
 
 
-	return DefWindowProc(Window, Message, WParam, LParam);
-	
+
+	CleanDeviceD3D();
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+	return 0;
 }
-     
 
-int CALLBACK WinMain(
-	HINSTANCE Instance,
-	HINSTANCE Prev_Instance,
-	LPSTR Command,
-	int Command_Show) {
+bool CreateDeviceD3D(HWND win_handle) {
+	DXGI_SWAP_CHAIN_DESC sd;
+	ZeroMemory(&sd, sizeof(sd));
+	//Only one back buffer.
+	sd.BufferCount = 1;
+	//Set width and height automatically
+	sd.BufferDesc.Width = 0;
+	sd.BufferDesc.Height = 0;
+	//Colors
+	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//For frame rate
+	sd.BufferDesc.RefreshRate.Numerator = 60;
+	sd.BufferDesc.RefreshRate.Denominator = 1;
+	//Allows switching between full-screen and windowed modes
+	sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	sd.OutputWindow = win_handle;
+	sd.SampleDesc.Count = 1;
+	sd.SampleDesc.Quality = 0;
+	sd.Windowed = TRUE;
+	//Discard the contents of the back buffer after they are displaye to screen
+	sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
-	/*Remeber to Properties->Advanced->Use MultiByte Character Set */
-	const auto class_name = "Direct X Practice";
-	WNDCLASSEX window_class = { 0 };
-	window_class.cbSize = sizeof(WNDCLASSEX);
-	window_class.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	window_class.lpfnWndProc = Win32MainWindowCallback;
-	window_class.cbClsExtra = 0;
-	window_class.cbWndExtra = 0;
-	window_class.lpszClassName = class_name;
 
-	RegisterClassEx(&window_class);
-
-	HWND window_handle =
-		CreateWindowEx(0, class_name, "Enter title here: ",
-			WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
-			200, 200, 640, 480,
-			nullptr, nullptr, Instance, nullptr);
-
-	ShowWindow(window_handle, SW_SHOW);
-
-	/* @from http://www.cplusplus.com/forum/beginner/38860/
-		GetMessage: "will check the message queue for message, if
-		there aren't any messages in the queue it will block.
-		Blocking, in this case, would mean that GetMessage will wait
-		for a valid message to pop up into the message queue"
-
-		PeekMessage: "Return the first message or return nothing if
-		there are no messages...genereally used in video games, or
-		applications that need to do things without the user sending
-		a message.*/
-
-	MSG msg = { 0 };
-	BOOL result;
-	while (result = GetMessage(&msg, NULL, 0, 0)) {
-		/*Translate Message: Outputs WM_CHAR messages if you need
-		  text input */
-		TranslateMessage(&msg); 
-		DispatchMessage(&msg);
+	if (D3D11CreateDeviceAndSwapChain(
+		nullptr,
+		D3D_DRIVER_TYPE_HARDWARE,
+		nullptr,
+		0,
+		nullptr,
+		0,
+		D3D11_SDK_VERSION,
+		&sd,
+		&p_SWAP_CHAIN,
+		&p_3D_DEVICE,
+		nullptr,
+		&p_3D_DEVICE_CONTEXT
+	) != S_OK) {
+		return false;
 	}
 
-	return msg.wParam;
+	//UINT createDeviceFlags = 0;
+	//createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+	//D3D_FEATURE_LEVEL featureLevel;
+	//const D3D_FEATURE_LEVEL featureLevelArray[2] = 
+	//	{ D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0, };
+
+	//if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 
+	//createDeviceFlags, featureLevelArray, 2, D3D11_SDK_VERSION, &sd, &g_pSwapChain, &g_pd3dDevice, &featureLevel, &g_pd3dDeviceContext) != S_OK)
+		//return false;
+	return true;
+
+}
+
+void CleanDeviceD3D() {
+	CleanupRenderTarget();
+	if (p_SWAP_CHAIN) {
+		p_SWAP_CHAIN->Release();
+		p_SWAP_CHAIN = NULL;
+	}
+
+	if (p_3D_DEVICE_CONTEXT) {
+		p_3D_DEVICE_CONTEXT->Release();
+		p_3D_DEVICE_CONTEXT = NULL;
+	}
+
+	if (p_3D_DEVICE) {
+		p_3D_DEVICE->Release();
+		p_3D_DEVICE = NULL;
+	}
+}
+
+void CreateRenderTarget() {
+	//Creates the back buffer
+	ID3D11Texture2D* p_back_buffer;
+	p_SWAP_CHAIN->GetBuffer(0, IID_PPV_ARGS(&p_back_buffer));
+	p_3D_DEVICE->CreateRenderTargetView(p_back_buffer, nullptr,
+		&p_RENDER_TARGET_VIEW);
+	p_back_buffer->Release();
+}
+
+void CleanupRenderTarget() {
+	if (p_RENDER_TARGET_VIEW) {
+		p_RENDER_TARGET_VIEW->Release();
+		p_RENDER_TARGET_VIEW = NULL;
+	}
 }
